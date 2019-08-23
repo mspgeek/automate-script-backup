@@ -1,21 +1,22 @@
-require('dotenv').config();
-const mysql = require('mysql');
 const labtech = require('labtech-script-decode');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const git = require('./git-actions');
 const MySQL = require('./mysql');
 
-const {MYSQL_USER, MYSQL_PASSWORD, MYSQL_HOST, MYSQL_DATABASE} = process.env;
-const REPOSITORY_FOLDER_NAME = 'repo';
-const REPOSITORY_FOLDER = path.join(__dirname, 'repo');
-
+let REPOSITORY_FOLDER_NAME;
+let REPOSITORY_FOLDER;
 let labSQL;
 let versions;
+let INITIAL;
+let ENABLE_GIT;
+let DISABLE_AS_USER;
+let ENABLE_PUSH;
+let VERBOSE;
 
 async function getScripts() {
-  // noinspection SqlResolve
   return await labSQL.execute({
     sql: `
         select ScriptId,
@@ -40,11 +41,12 @@ async function getScripts() {
                ScriptGuid,
                ScriptFlags,
                Parameters,
-               Last_User,
-               Last_Date
+               users.name                             as 'last_user',
+               users.email                            as 'email'
         from lt_scripts
                  left join scriptfolders on scriptfolders.FolderID = lt_scripts.FolderId
                  left join scriptfolders as scriptfolderparent on scriptfolderparent.FolderID = scriptfolders.ParentID
+                 left join users on left(lt_scripts.Last_User, locate('@', lt_scripts.Last_User) - 1) = users.name
     `,
   });
 }
@@ -94,7 +96,6 @@ function sanitizeFileName(input) {
     .replace(/\\/g, '')
     .replace(/\?/g, '')
     .replace(/\*/g, '');
-
 }
 
 function buildXML({script}) {
@@ -125,8 +126,7 @@ function buildXML({script}) {
 
   const {major, minor} = versions;
 
-  return `
-<LabTech_Expansion
+  return `<LabTech_Expansion
   Version="${escape(`${major}.${minor}`)}"
   Name="${escape(ScriptName)}"
   Type="PackedScript">
@@ -181,14 +181,17 @@ function buildXML({script}) {
 function buildTXT({script}) {
   const {ScriptText: {InitialCheck, ThenSection, ElseSection}} = script;
 
-  return `
-${InitialCheck}
+  return `${InitialCheck}
 ${ThenSection}
 ${ElseSection}
 `;
 }
 
 function writeScripts({interpolatedScripts = []}) {
+  if (!fs.existsSync(REPOSITORY_FOLDER)) {
+    fs.mkdirSync(REPOSITORY_FOLDER);
+  }
+
   interpolatedScripts.forEach(script => writeScriptToFile({script}));
 }
 
@@ -211,28 +214,57 @@ function writeScriptToFile({script}) {
     fs.mkdirSync(absoluteDirPath);
   }
 
-  fs.writeFileSync(absoluteFilePathTXT, buildTXT({script}), {flag: 'w'});
-  fs.writeFileSync(absoluteFilePathXML, XML, {flag: 'w'});
-}
+  const scriptTXT = buildTXT({script});
 
-async function backup({MYSQL_USER, MYSQL_PASSWORD, MYSQL_HOST, MYSQL_DATABASE, REPOSITORY_FOLDER_NAME}) {
-  labSQL = new MySQL({user: MYSQL_USER, password: MYSQL_PASSWORD, database: MYSQL_DATABASE, host: MYSQL_HOST});
+  if (fs.existsSync(absoluteFilePathTXT)) {
+    // check md5
+    const XMLmd5 = md5(fs.readFileSync(absoluteFilePathXML));
 
-  try {
-    versions = await getAutomateVersion();
-    console.log(`Successfully connected to Automate Server ${MYSQL_HOST}/${MYSQL_DATABASE} version ${versions.major}.${versions.minor}`);
-    const scripts = await getScripts();
-    console.log(`Successfully loaded ${scripts.length} scripts`);
-    const interpolatedScripts = await interpolate(scripts);
-    writeScripts({interpolatedScripts});
-    console.log(`Successfully exported scripts to ${REPOSITORY_FOLDER}`);
-    process.exit(0);
-  } catch (err) {
-    console.log(err);
-    process.exit(1);
+    if (md5(XML) !== XMLmd5) {
+      fs.writeFileSync(absoluteFilePathTXT, scriptTXT, {flag: 'w'});
+      fs.writeFileSync(absoluteFilePathXML, XML, {flag: 'w'});
+    }
+  } else {
+    fs.writeFileSync(absoluteFilePathTXT, scriptTXT, {flag: 'w'});
+    fs.writeFileSync(absoluteFilePathXML, XML, {flag: 'w'});
   }
 }
 
+async function addFile({path, script}) {
+  return git.addFile({directory: REPOSITORY_FOLDER, path, message: ``})
+}
+
+function getVersions() {
+  return versions;
+}
+
+async function init({
+  enableGit,
+  disableAsUser,
+  push,
+  verbose,
+  initial,
+  directory,
+  MYSQL_USER,
+  MYSQL_PASSWORD,
+  MYSQL_DATABASE = 'labtech',
+  MYSQL_HOST = '127.0.0.1',
+}) {
+  labSQL = new MySQL({user: MYSQL_USER, password: MYSQL_PASSWORD, database: MYSQL_DATABASE, host: MYSQL_HOST});
+  versions = await getAutomateVersion();
+  REPOSITORY_FOLDER_NAME = directory;
+  REPOSITORY_FOLDER = path.join(__dirname, directory);
+  ENABLE_GIT = enableGit;
+  DISABLE_AS_USER = disableAsUser;
+  ENABLE_PUSH = push;
+  VERBOSE = verbose;
+  INITIAL = initial;
+}
+
 module.exports = {
-  backup,
+  init,
+  getVersions,
+  getScripts,
+  interpolate,
+  writeScripts,
 };

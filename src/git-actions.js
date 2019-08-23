@@ -6,16 +6,6 @@ const fs = require('fs');
 const git = require('simple-git');
 const gitP = require('simple-git/promise');
 
-const {
-  GIT_USER,
-  GIT_DEPLOY_KEY_PUB,
-  GIT_DEPLOY_KEY_PRIV,
-  GIT_DEPLOY_KEY_PASS,
-  GIT_REMOTE_URL,
-} = process.env;
-
-const REPOSITORY_FOLDER = path.join(__dirname, 'repo');
-
 
 exports.init = function ({directory, remote}) {
   return git(directory)
@@ -28,11 +18,24 @@ exports.push = function ({directory}) {
     .push('origin', 'master');
 };
 
-exports.addFile = function ({directory, message, path, user, email}) {
+exports.addFile = function ({directory, path, message}) {
+  return git(directory)
+    .add(path);
+};
+
+exports.commit = function ({directory, message}) {
+  return git(directory)
+    .commit(message);
+};
+
+exports.commitFileWithAuthor = function ({directory, message, path, user, email}) {
   return git(directory)
     .add(path)
     .commit(message, path, {'--author': `"${user} <${email}>"`});
 };
 
-
+exports.setConfig = function ({directory, key, value}) {
+  return git(directory)
+    .addConfig(key, value);
+};
 
