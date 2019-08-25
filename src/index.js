@@ -37,18 +37,18 @@ const program = new Commander.Command();
     initial,
   } = program;
 
-  console.log(
-    output,
-    username,
-    password,
-    server,
-    database,
-    enableGit,
-    disableAsUser,
-    push,
-    verbose,
-    initial,
-  );
+  // console.log(
+  //   output,
+  //   username,
+  //   password,
+  //   server,
+  //   database,
+  //   enableGit,
+  //   disableAsUser,
+  //   push,
+  //   verbose,
+  //   initial,
+  // );
 
   try {
     await actions.init({
@@ -69,9 +69,7 @@ const program = new Commander.Command();
     console.log(`Successfully loaded ${scripts.length} scripts`);
     const interpolatedScripts = await actions.interpolate(scripts);
     actions.writeScripts({interpolatedScripts});
-    git.
     console.log(`Successfully exported scripts to ${output}`);
-
 
     process.exit(0);
   } catch (err) {

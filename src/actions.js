@@ -198,15 +198,15 @@ function writeScripts({interpolatedScripts = []}) {
 function writeScriptToFile({script}) {
   const {ScriptFolderName, ParentFolderName, ScriptName, XML} = script;
 
-  let relativeDirPath = ScriptFolderName;
+  let relativeDirPath = sanitizeFileName(ScriptFolderName);
   if (ParentFolderName) {
-    if (!fs.existsSync(path.resolve(__dirname, REPOSITORY_FOLDER_NAME, ParentFolderName))) {
-      fs.mkdirSync(path.resolve(__dirname, REPOSITORY_FOLDER_NAME, ParentFolderName));
+    if (!fs.existsSync(path.resolve(process.cwd(), REPOSITORY_FOLDER_NAME, sanitizeFileName(ParentFolderName)))) {
+      fs.mkdirSync(path.resolve(process.cwd(), REPOSITORY_FOLDER_NAME, sanitizeFileName(ParentFolderName)));
     }
-    relativeDirPath = `${ParentFolderName}/${ScriptFolderName}`;
+    relativeDirPath = `${sanitizeFileName(ParentFolderName)}/${sanitizeFileName(ScriptFolderName)}`;
   }
 
-  const absoluteDirPath = path.resolve(__dirname, REPOSITORY_FOLDER_NAME, relativeDirPath);
+  const absoluteDirPath = path.resolve(process.cwd(), REPOSITORY_FOLDER_NAME, relativeDirPath);
   const absoluteFilePathXML = path.resolve(absoluteDirPath, `${sanitizeFileName(ScriptName)}.xml`);
   const absoluteFilePathTXT = path.resolve(absoluteDirPath, `${sanitizeFileName(ScriptName)}.txt`);
 
@@ -253,7 +253,8 @@ async function init({
   labSQL = new MySQL({user: MYSQL_USER, password: MYSQL_PASSWORD, database: MYSQL_DATABASE, host: MYSQL_HOST});
   versions = await getAutomateVersion();
   REPOSITORY_FOLDER_NAME = directory;
-  REPOSITORY_FOLDER = path.join(__dirname, directory);
+  REPOSITORY_FOLDER = path.join(process.cwd(), directory);
+  console.log('REPOSITORY_FOLDER is ', REPOSITORY_FOLDER);
   ENABLE_GIT = enableGit;
   DISABLE_AS_USER = disableAsUser;
   ENABLE_PUSH = push;
